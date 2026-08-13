@@ -106,6 +106,17 @@ final class MediaLibrary {
     var canStepBackward: Bool { !items.isEmpty && currentIndex > 0 }
     var canStepForward: Bool { !items.isEmpty && currentIndex < items.count - 1 }
 
+    // MARK: - Conversion
+
+    /// Points an item at a playable conversion of itself.
+    ///
+    /// The item keeps its identity, so the page stays where it is in the strip
+    /// and the viewer isn't scrolled somewhere else mid-conversion.
+    func useConverted(_ url: URL, for id: MediaItem.ID) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        items[index].url = url
+    }
+
     // MARK: - Slideshow
 
     /// When the current still has had its turn.
