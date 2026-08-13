@@ -1,0 +1,22 @@
+.DS_Store
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+
+# Exported / built app bundles
+*.app/
+
+# SwiftPM
+.build/
+.swiftpm/
+
+# Unrelated `swift package init` scaffold sitting in this directory — the app is
+# the Xcode project, not a package. Remove these files and this block if you
+# don't want them around.
+Package.swift
+Sources/
+Tests/
