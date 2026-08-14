@@ -38,9 +38,9 @@ struct VideoPageView: View {
                 VideoPlayer(player: player)
             }
         }
-        .padding(EdgeInsets(top: 0, leading: 48.0, bottom: 48.0, trailing: 48.0))
+        // No padding or background of its own: the carousel card supplies the
+        // surface and the rounded shape, and the video fills it.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black)
         .task(id: item.url) { await prepare() }
         .task(id: playerItem) { await watch() }
         // A clip that can't play has no end to wait for, so give it the same

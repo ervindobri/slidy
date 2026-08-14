@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- macOS only. The Mac icon ships as a shaped .icns rather than an asset
+	     catalog icon: macOS 26 insets a catalog app icon into its own tile and
+	     paints a light plate behind it, which shows as a pale ring around a
+	     dark icon. An .icns is used exactly as authored. iOS still takes its
+	     full-bleed icon from Assets.xcassets. -->
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+</dict>
+</plist>

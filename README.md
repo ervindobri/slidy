@@ -96,6 +96,18 @@ library which page is showing instead of trusting that snapshot.
 decode per page touched, each holding a display-sized bitmap; a dozen at once is
 hundreds of megabytes for images nobody is looking at any more.
 
+**The Mac icon is an `.icns`, the iOS icon is an asset catalog entry.** They
+can't be the same file. macOS 26 takes an app icon from an asset catalog,
+insets it into its own tile and paints a light plate behind it — which reads as
+a pale ring around a dark icon, and gets worse, not better, if you pre-inset the
+artwork yourself. An `.icns` referenced by `CFBundleIconFile` is used exactly as
+authored, so [AppIcon.icns](Slidy/AppIcon.icns) contains the shaped artwork
+(824pt body centred in a 1024pt canvas, with the shadow in the margin) and
+`ASSETCATALOG_COMPILER_APPICON_NAME` is scoped to the iOS SDKs only. iOS wants
+the opposite — full-bleed, no rounding — and masks it itself, which is what
+`1024.png` in the asset catalog is for. Run `iconutil -c iconset
+Slidy/AppIcon.icns` to get the individual Mac sizes back.
+
 **The frame-by-frame converter deadlocks if you drain it wrong.** Three ways,
 all of which look like a hang with no error: sharing one `AVAssetReader` between
 the video and audio outputs; polling `isReadyForMoreMediaData` instead of going

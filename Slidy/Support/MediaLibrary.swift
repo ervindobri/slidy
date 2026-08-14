@@ -93,6 +93,100 @@ final class MediaLibrary {
         for url in temporaryCopies { try? FileManager.default.removeItem(at: url) }
         temporaryCopies.removeAll()
     }
+    
+    // MARK: - Editing
+
+    /// Why the last delete or rotate failed, for the UI to surface. Cleared on
+    /// the next attempt.
+    var actionError: String?
+
+    /// Turns the current still a quarter turn clockwise and writes it back.
+    ///
+    /// - Returns: whether anything was rotated.
+    @discardableResult
+    func rotateImage() -> Bool {
+        actionError = nil
+
+        guard let item = currentItem, item.kind == .image else { return false }
+        let index = currentIndex
+
+        do {
+            try ImageRotation.rotateClockwise(at: item.url)
+        } catch {
+            actionError = error.localizedDescription
+            return false
+        }
+
+        // The file is at the same path as before, so nothing downstream would
+        // notice it had changed without being told.
+        items[index].markChanged()
+        return true
+    }
+
+    // MARK: - Deleting
+
+    /// Takes the current item out of the library and off the disk.
+    ///
+    /// - Returns: whether anything was deleted.
+    @discardableResult
+    func deleteCurrent() -> Bool {
+        actionError = nil
+
+        // Read the item *and* its index before touching the array. Removing
+        // first leaves `currentID` pointing at something that no longer exists,
+        // at which point `currentIndex` quietly answers 0 and `currentItem`
+        // resolves to a different file — which is the one that would be erased.
+        guard let item = currentItem else { return false }
+        let index = currentIndex
+
+        do {
+            try discard(item)
+        } catch {
+            // The file is still there, so the item stays in the list too:
+            // better to show a set that matches the disk than one that doesn't.
+            actionError = error.localizedDescription
+            return false
+        }
+
+        items.remove(at: index)
+        selectAfterRemoval(at: index)
+        return true
+    }
+
+    /// Sends a file to the Trash where there is one, and deletes it outright
+    /// where there isn't.
+    ///
+    /// The original is what goes: for a converted clip `url` points at the
+    /// re-encoded copy in our own container, and deleting only that would leave
+    /// the file the user actually asked to be rid of sitting on the disk. The
+    /// conversion goes too, or the cache keeps serving a deleted photo back.
+    private func discard(_ item: MediaItem) throws {
+        #if os(macOS)
+        try FileManager.default.trashItem(at: item.originalURL, resultingItemURL: nil)
+        #else
+        try FileManager.default.removeItem(at: item.originalURL)
+        #endif
+
+        if item.isConverted {
+            try? FileManager.default.removeItem(at: item.url)
+        }
+    }
+
+    /// Moves to whatever slid into the deleted item's place, or the one before
+    /// it if the last page was the one that went.
+    ///
+    /// Sets `currentID` directly rather than going through `step`, which takes
+    /// a *delta* and measures it from a `currentIndex` that no longer resolves.
+    private func selectAfterRemoval(at index: Int) {
+        guard !items.isEmpty else {
+            isSlideshowRunning = false
+            ticker?.cancel()
+            ticker = nil
+            currentID = nil
+            return
+        }
+        currentID = items[min(index, items.count - 1)].id
+    }
 
     // MARK: - Navigation
 

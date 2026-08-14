@@ -206,8 +206,11 @@ struct ContentView: View {
     }
 
     private var bottomBar: some View {
+        VStack {
+            
+            MediaActions()
         MediaProgressIndicator(index: library.currentIndex, count: library.items.count)
-            .padding(.top, 30)
+            .padding(.top, 12)
             .padding(.bottom, 18)
             .frame(maxWidth: .infinity)
             .background {
@@ -219,6 +222,7 @@ struct ContentView: View {
                 .ignoresSafeArea(edges: .bottom)
                 .allowsHitTesting(false)
             }
+        }
     }
 
     private var importProgress: some View {
@@ -260,6 +264,9 @@ struct ContentView: View {
     }
     #endif
 }
+
+
+
 
 /// Small translucent round button face used by the top bar.
 struct GlassIcon: View {

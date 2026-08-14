@@ -20,6 +20,12 @@ struct MediaItem: Identifiable, Hashable {
     /// The file this item was opened from, which stays put across a conversion.
     private(set) var originalURL: URL
 
+    /// Bumped whenever the file changes underneath us. Rotating rewrites it in
+    /// place, so the path on its own can't tell a page it needs decoding again.
+    private(set) var revision = 0
+
+    mutating func markChanged() { revision += 1 }
+
     init(url: URL, kind: MediaKind) {
         self.url = url
         self.kind = kind
