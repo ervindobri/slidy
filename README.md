@@ -23,6 +23,8 @@ extension, so a mislabelled file can't sneak through.
   gives the new page a full turn. Space toggles it on macOS.
 - Videos loop on their own when the slideshow isn't running, and play only
   while they're the page on screen.
+- A video this device can't play offers **Convert to MP4** on its page. See
+  [Old camcorder and digicam footage](#old-camcorder-and-digicam-footage).
 - Escape closes the current set on macOS.
 
 ## Building
@@ -51,6 +53,7 @@ on a device.
 | [Models/MediaItem.swift](Slidy/Models/MediaItem.swift) | The item type, and the check that decides what counts as media |
 | [Support/MediaLibrary.swift](Slidy/Support/MediaLibrary.swift) | Open set, current page, slideshow clock, security-scoped URL lifetimes |
 | [Support/ImageDecoder.swift](Slidy/Support/ImageDecoder.swift) | Decodes stills at display size, one at a time |
+| [Support/VideoConverter.swift](Slidy/Support/VideoConverter.swift) | Re-encodes videos this device can't play, and caches the result |
 | [Support/PhotoImport.swift](Slidy/Support/PhotoImport.swift) | Copies Photos picks to temporary files (iOS/iPadOS) |
 | [Views/ContentView.swift](Slidy/Views/ContentView.swift) | Screen layout, importers, drag and drop |
 | [Views/MediaPagerView.swift](Slidy/Views/MediaPagerView.swift) | The paging horizontal scroll view |
@@ -62,6 +65,10 @@ on a device.
 
 The Xcode project uses a file-system-synchronized group, so new files under
 `Slidy/` are picked up without editing the project file.
+
+One dependency, resolved by Swift Package Manager:
+[MediaToolSwift](https://github.com/starkdmi/MediaToolSwift), which drives the
+video conversion described below.
 
 ## Things worth knowing before changing this
 
@@ -89,10 +96,55 @@ library which page is showing instead of trusting that snapshot.
 decode per page touched, each holding a display-sized bitmap; a dozen at once is
 hundreds of megabytes for images nobody is looking at any more.
 
+**The frame-by-frame converter deadlocks if you drain it wrong.** Three ways,
+all of which look like a hang with no error: sharing one `AVAssetReader` between
+the video and audio outputs; polling `isReadyForMoreMediaData` instead of going
+through `requestMediaDataWhenReady`, which is what actually drives that flag;
+and finishing the video track before starting the audio, when the writer
+interleaves them and stops marking either input ready while the other lags.
+
 ## Old camcorder and digicam footage
 
 macOS dropped its Motion JPEG and other legacy QuickTime decoders in Catalina.
 Files from mid-2000s digital cameras are often Motion JPEG A video with µ-Law
 audio: AVFoundation still parses the container and plays the audio, but there is
-no decoder for the picture. Slidy reports this on the page rather than showing a
-black screen, but the file genuinely cannot be played and has to be transcoded.
+no decoder for the picture.
+
+Slidy offers to convert these. The page shows **Convert to MP4**; press it and
+the clip is re-encoded to H.264/AAC and starts playing in place. Your original
+file is never touched — Slidy only ever has read access to it, and the
+conversion is written to the app's own storage:
+
+```
+~/Library/Containers/com.ervindobri.Slidy/Data/Library/Application Support/Slidy/Converted
+```
+
+Conversions are keyed by path, size and modification date, so a file is only
+converted once: reopen it later and it plays straight away, with no prompt.
+Delete that folder to reclaim the space — anything in it can be made again.
+
+Two conversion paths, tried in order:
+
+**1. [MediaToolSwift](https://github.com/starkdmi/MediaToolSwift)**, which
+handles anything the system can decode — odd containers, unusual profiles,
+formats that play badly rather than not at all.
+
+**2. Frame by frame**, for files the system has *no* decoder for. This is the
+Motion JPEG case, and it's why path 1 isn't enough on its own: MediaToolSwift —
+like every AVFoundation-based converter — needs `AVAssetReader` to decompress
+the source, and on these files that fails outright:
+
+```
+AVFoundationErrorDomain -11833 "Cannot Decode"
+The decoder required for this media cannot be found.
+```
+
+AVFoundation can still *demux* the file, though, and Motion JPEG frames are
+ordinary JPEGs. So Slidy asks the reader for the samples untouched
+(`outputSettings: nil`), decodes each one with ImageIO, and hands the pixels to
+VideoToolbox to re-encode. Audio goes the normal way — µ-Law is still supported.
+
+Detecting the problem needs care too. `isPlayable` doesn't answer the question:
+it reports on the container, which these files pass. The only reliable test is
+to ask for an actual frame, so Slidy decodes one — after playback has already
+started, so a normal clip never waits on it.

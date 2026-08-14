@@ -107,7 +107,7 @@ struct ContentView: View {
     
     
     private var itemTitle: some View {
-        Text((library.currentItem?.displayName ?? "") + "." + (library.currentItem?.url.pathExtension ?? ""))
+        Text(library.currentItem?.displayFileName ?? "")
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(.white.opacity(0.75))
             .lineLimit(1)

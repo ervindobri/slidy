@@ -107,12 +107,16 @@ struct VideoPageView: View {
         conversion = .running(0)
 
         let source = item.url
+        // Report progress through the binding rather than capturing the view:
+        // the encoder calls back from its own queue, and this way nothing but
+        // the state box crosses over.
+        let state = $conversion
         do {
             let converted = try await VideoConverter.convert(source: source) { fraction in
                 Task { @MainActor in
-                    // A late progress callback must not reopen the panel after
-                    // the conversion has already finished and been swapped in.
-                    if case .running = conversion { conversion = .running(fraction) }
+                    // A late callback must not reopen the panel after the
+                    // conversion has finished and been swapped in.
+                    if case .running = state.wrappedValue { state.wrappedValue = .running(fraction) }
                 }
             }
             conversion = .idle
@@ -153,6 +157,16 @@ struct VideoPageView: View {
             player.actionAtItemEnd = .none
             playerItem = newItem
             syncPlayback()
+
+            // Started playing already, so a normal clip never waits on this.
+            // The check matters for files that open and play their audio while
+            // the picture stays black — nothing before this point notices.
+            let url = item.url
+            if await !VideoConverter.canDecodePicture(at: url) {
+                guard url == item.url else { return }
+                player.pause()
+                await reportUnplayable("This device has no decoder for this video's format.")
+            }
         } catch {
             await reportUnplayable(error.localizedDescription)
         }

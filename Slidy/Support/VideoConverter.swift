@@ -59,6 +59,33 @@ enum VideoConverter {
         return destination
     }
 
+    // MARK: - Detecting
+
+    /// Whether this device can decode the picture, not merely open the file.
+    ///
+    /// `isPlayable` is not the question it looks like: it says AVFoundation
+    /// understands the container, which for the files this whole path exists
+    /// for is perfectly true. A Motion JPEG clip off a mid-2000s camera parses,
+    /// reports a video track, and plays its audio happily while the picture
+    /// stays black, because the decoder was dropped from the OS years ago and
+    /// nothing says so until something actually asks for a frame.
+    ///
+    /// So we ask for one. Tolerances are wide open so it takes the nearest
+    /// keyframe and doesn't decode any more than it has to.
+    static func canDecodePicture(at url: URL) async -> Bool {
+        // A separate asset from the one being played: an image generator
+        // mutates the asset it holds, which is not safe to share with a player.
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+        generator.requestedTimeToleranceBefore = .positiveInfinity
+        generator.requestedTimeToleranceAfter = .positiveInfinity
+        do {
+            _ = try await generator.image(at: .zero)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     // MARK: - Converting
 
     /// Converts `source`, reporting progress from 0 to 1.
