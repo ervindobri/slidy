@@ -19,12 +19,7 @@ struct MediaPagerView: View {
     @State private var snappedItem = 0.0
     @State private var draggingItem = 0.0
 
-    /// How much of the screen the middle card takes up.
-    private let cardWidthRatio: CGFloat = 0.62
-    private let cardHeightRatio: CGFloat = 0.72
-
-    /// Radius of the arc the cards are placed around.
-    private let radiusRatio = 0.34
+    private let metrics = CarouselMetrics.current
 
     /// How many cards make up a half turn of the arc. Fixed rather than taken
     /// from the number of open files, so the stack looks the same whether you
@@ -35,15 +30,11 @@ struct MediaPagerView: View {
     private let scalePerStep = 0.16
     private let dimPerStep = 0.18
 
-    /// Cards beyond this are behind the stack and off screen. They aren't built
-    /// at all — each one would hold a decoded image.
-    private let reach = 3
-
     var body: some View {
         GeometryReader { proxy in
-            let radius = proxy.size.width * radiusRatio
-            let cardWidth = proxy.size.width * cardWidthRatio
-            let cardHeight = proxy.size.height * cardHeightRatio
+            let radius = proxy.size.width * metrics.radiusRatio(spread: spread)
+            let cardWidth = proxy.size.width * metrics.cardWidthRatio
+            let cardHeight = proxy.size.height * metrics.cardHeightRatio
 
             ZStack {
                 ForEach(visibleItems(), id: \.element.id) { index, item in
@@ -108,9 +99,11 @@ struct MediaPagerView: View {
         return sin(angle) * radius
     }
 
-    /// How far you have to drag to move one card along.
+    /// How far you have to drag to move one card along. Scaled to the card, not
+    /// the screen: a near-full-width card that jumps on a 50pt flick feels like
+    /// it's slipping out from under your thumb.
     private func dragLength(_ width: CGFloat) -> CGFloat {
-        max(1, width * 0.14)
+        max(1, width * metrics.dragRatio)
     }
 
     // MARK: - Contents
@@ -121,8 +114,8 @@ struct MediaPagerView: View {
     private func visibleItems() -> [(offset: Int, element: MediaItem)] {
         guard !library.items.isEmpty else { return [] }
         let middle = Int(draggingItem.rounded())
-        let lower = max(0, middle - reach)
-        let upper = min(library.items.count - 1, middle + reach)
+        let lower = max(0, middle - metrics.reach)
+        let upper = min(library.items.count - 1, middle + metrics.reach)
         guard lower <= upper else { return [] }
         return (lower...upper).map { ($0, library.items[$0]) }
     }
@@ -165,6 +158,63 @@ struct MediaPagerView: View {
             library.step(delta)
         }
         return .handled
+    }
+}
+
+/// How the stack is proportioned, which can't be the same on both platforms: a
+/// Mac window is wide enough to show a real stack of cards behind the current
+/// one, a phone held in the hand is not. There the current photo is the view,
+/// and its neighbours are slivers at the edges that say which way to swipe.
+struct CarouselMetrics {
+
+    /// How much of the view the middle card takes up.
+    var cardWidthRatio: CGFloat
+    var cardHeightRatio: CGFloat
+
+    /// Centre-to-centre distance between neighbouring cards, as a fraction of
+    /// the view's width. This is the number that decides how much of the next
+    /// card you see, so it's set directly rather than dialled in through the
+    /// radius of the arc the cards sit on.
+    var neighbourStep: CGFloat
+
+    /// How far you drag to move one card along, as a fraction of the width.
+    var dragRatio: CGFloat
+
+    /// How many cards either side get built. Anything further out is off screen,
+    /// and each one costs a decoded image.
+    var reach: Int
+
+    static var current: CarouselMetrics {
+        #if os(macOS)
+        // The stack as it was: a wide card with its neighbours fanned out behind.
+        CarouselMetrics(
+            cardWidthRatio: 0.62,
+            cardHeightRatio: 0.72,
+            neighbourStep: 0.138,
+            dragRatio: 0.14,
+            reach: 3
+        )
+        #else
+        // 0.90 wide, with the neighbour pushed just far enough out that only its
+        // near edge clears the current card:
+        //   half of this card (0.45) + half of the next, shrunk one step
+        //   (0.45 × 0.84 = 0.378) ≈ 0.83, less a little so it isn't flush.
+        CarouselMetrics(
+            cardWidthRatio: 0.90,
+            // Tall enough to fill the gap between the bars, which overlay the
+            // card's corners rather than sitting above and below it.
+            cardHeightRatio: 0.74,
+            neighbourStep: 0.80,
+            dragRatio: 0.32,
+            reach: 2
+        )
+        #endif
+    }
+
+    /// The arc's radius, solved backwards from where the neighbouring card is
+    /// wanted: the card one place out sits at `sin(2π / spread) × radius`.
+    func radiusRatio(spread: Double) -> CGFloat {
+        neighbourStep / CGFloat(sin(.pi * 2 / spread))
     }
 }
 

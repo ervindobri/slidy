@@ -74,36 +74,30 @@ struct CapsuleActionLabel: View {
         // Every platform has to be named here: `macOS 26.0, *` alone still lets
         // the glass calls through on iOS 17 and fails to build there.
         if #available(macOS 26.0, iOS 26.0, *) {
-            pill.padding(16.0).buttonStyle(.liquidGlass)
+            pill.padding(4.0).buttonStyle(.liquidGlass)
         } else {
             pill
         }
     }
 
     private var pill: some View {
-        
-                        Button(action: {
-                        
-                            withAnimation {
-                                onPressed?()
-                            }
-                          }, label: {
-                              HStack(spacing: 12.0) {
-                                  
-                              
-                              Image(systemName: systemImage)
-                                  .frame(width: 24, height: 24)
-                              Text(title)
-                                  .lineLimit(1)
-                                  .fixedSize(horizontal: true, vertical: false)
-                              }
-                              
-                          })
-                        .focusable(false)
-                        .border(FillShapeStyle(), width: 0.0)
-                        .padding(12.0)
-                        .cornerRadius(99.0)
-                    
+        Button {
+            withAnimation {
+                onPressed?()
+            }
+        } label: {
+            HStack(spacing: 12.0) {
+                Image(systemName: systemImage)
+                    .frame(width: 24, height: 24)
+                Text(title)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+        .focusable(false)
+        // No clip shape here: the button style scales past its layout bounds
+        // when pressed and any clip crops the sides off mid-animation. The
+        // glass effect already draws the rounded shape.
     }
 }
 

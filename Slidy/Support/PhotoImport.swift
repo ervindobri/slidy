@@ -1,4 +1,3 @@
-#if os(iOS)
 import CoreTransferable
 import Foundation
 import UniformTypeIdentifiers
@@ -21,15 +20,19 @@ struct PickedMedia: Transferable {
 enum TemporaryStore {
     /// Copies a transferred file into a private folder we are free to delete later.
     static func take(_ file: URL) throws -> URL {
+        let destination = try slot(named: file.lastPathComponent)
+        try FileManager.default.copyItem(at: file, to: destination)
+        return destination
+    }
+
+    /// An unused path in a private folder, for callers that write the file
+    /// themselves rather than copying one that already exists.
+    static func slot(named name: String) throws -> URL {
         let folder = FileManager.default.temporaryDirectory
             .appendingPathComponent("SlidyImports", isDirectory: true)
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
 
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-
-        let destination = folder.appendingPathComponent(file.lastPathComponent)
-        try FileManager.default.copyItem(at: file, to: destination)
-        return destination
+        return folder.appendingPathComponent(name)
     }
 }
-#endif

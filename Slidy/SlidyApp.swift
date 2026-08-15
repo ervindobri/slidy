@@ -6,6 +6,7 @@ import AVFoundation
 @main
 struct SlidyApp: App {
     @State private var library = MediaLibrary()
+    @State private var recents = RecentSources()
 
     init() {
         #if os(iOS)
@@ -19,6 +20,7 @@ struct SlidyApp: App {
         WindowGroup {
             ContentView()
                 .environment(library)
+                .environment(recents)
         }
         #if os(macOS)
         .defaultSize(width: 1100, height: 720)

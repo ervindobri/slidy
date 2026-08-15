@@ -3,6 +3,7 @@ import ImageIO
 import SwiftUI
 import UniformTypeIdentifiers
 
+
 /// One image, fitted to the page.
 struct ImagePageView: View {
     let item: MediaItem
@@ -47,6 +48,16 @@ struct ImagePageView: View {
             // spill past the card it's meant to be lining.
             .frame(width: proxy.size.width, height: proxy.size.height)
             .clipped()
+            .contextMenu {
+                
+                Button {
+                    ClipboardManager.copyImage(url: item.url)
+                } label: {
+                    HStack {
+                        Image(systemName: "paperclip")
+                        Text("Copy image")}
+                }
+            }
             // Keyed on the file as well as the width: SwiftUI can hand this
             // view a different item while reusing it, and keying on width alone
             // leaves the previous photo on screen for the new page.

@@ -1,11 +1,11 @@
 import SwiftUI
 import UniformTypeIdentifiers
-#if os(iOS)
+// PhotosPicker is macOS 13+ / iOS 16+, so the library button is not iOS-only.
 import PhotosUI
-#endif
 
 struct ContentView: View {
     @Environment(MediaLibrary.self) private var library
+    @Environment(RecentSources.self) private var recents
 
     @State private var isPresentingImporter = false
     @State private var isDropTargeted = false
@@ -14,9 +14,8 @@ struct ContentView: View {
     
     @Namespace private var namespace
 
-    #if os(iOS)
     @State private var photoSelection: [PhotosPickerItem] = []
-    #endif
+    @State private var isPresentingPhotoPicker = false
 
     /// Everything Slidy will open: stills, movies, and folders of them.
     private var openableTypes: [UTType] { [.image, .movie, .folder] }
@@ -35,6 +34,25 @@ struct ContentView: View {
         #endif
     }
 
+    /// The title pill is roomy on a Mac and tight on a phone, where the same
+    /// padding leaves the buttons nowhere to go.
+    private var titlePadding: CGFloat {
+        #if os(macOS)
+        16
+        #else
+        10
+        #endif
+    }
+
+    /// iOS draws the bar under the status bar, which is already padding.
+    private var topBarVerticalPadding: CGFloat {
+        #if os(macOS)
+        12
+        #else
+        6
+        #endif
+    }
+
     var body: some View {
         ZStack {
             Color.black
@@ -43,18 +61,26 @@ struct ContentView: View {
             if library.isEmpty {
                 EmptyStateView(isDropTargeted: isDropTargeted) {
                     
-                    CapsuleActionLabel(title: "Open Files", systemImage: "folder") {
-                        isPresentingImporter = true
+                    VStack(spacing: 0.0) {
+                        CapsuleActionLabel(title: "Open Files", systemImage: "folder") {
+                            isPresentingImporter = true
+                        }
+                        // Presented from a plain button rather than wrapping the
+                        // pill in a PhotosPicker: CapsuleActionLabel is itself a
+                        // Button, and a Button inside a picker's label eats the
+                        // tap, so the picker never comes up.
+                        CapsuleActionLabel(title: "Photo Library", systemImage: "photo") {
+                            isPresentingPhotoPicker = true
+                        }
+                        if !recents.isEmpty {
+                            Spacer().frame(maxHeight: 24.0)
+                            RecentSourcesView(
+                                entries: recents.entries,
+                                open: { entry in reopen(entry) },
+                                remove: { recents.remove($0) }
+                            )
+                        }
                     }
-                    #if os(iOS)
-                    PhotosPicker(
-                        selection: $photoSelection,
-                        selectionBehavior: .ordered,
-                        matching: .any(of: [.images, .videos])
-                    ) {
-                        CapsuleActionLabel(title: "Photo Library", systemImage: "photo")
-                    }
-                    #endif
                 }
             } else {
                 MediaPagerView()
@@ -81,12 +107,17 @@ struct ContentView: View {
             case .failure(let error): notice = error.localizedDescription
             }
         }
-        #if os(iOS)
+        .photosPicker(
+            isPresented: $isPresentingPhotoPicker,
+            selection: $photoSelection,
+            maxSelectionCount: nil,
+            selectionBehavior: .ordered,
+            matching: .any(of: [.images, .videos])
+        )
         .onChange(of: photoSelection) { _, selection in
             guard !selection.isEmpty else { return }
             Task { await importFromPhotos(selection) }
         }
-        #endif
         .alert("Nothing to show", isPresented: noticeBinding, presenting: notice) { _ in
             Button("OK", role: .cancel) {}
         } message: { text in
@@ -126,43 +157,54 @@ struct ContentView: View {
             if #available(macOS 26.0, iOS 26.0, *) {
                 GlassEffectContainer {
                     itemTitle
-                        .padding(16.0).glassEffect()
+                        .padding(.horizontal, titlePadding)
+                        .padding(.vertical, titlePadding * 0.6)
+                        .glassEffect()
                 }
+                // The filename is the one thing here that can be any length, so
+                // it's what gives way when the row runs out of room. Without
+                // this the buttons are the ones that get squeezed, and on a
+                // phone they end up overlapping.
+                .layoutPriority(-1)
             } else {
                 // Fallback on earlier versions
                 itemTitle
+                    .layoutPriority(-1)
             }
 
-            Spacer(minLength: 12)
+            // Keeps the controls against the trailing edge rather than trailing
+            // the title around as it changes length.
+            Spacer(minLength: 8)
 
-            #if os(iOS)
-            PhotosPicker(
-                selection: $photoSelection,
-                selectionBehavior: .ordered,
-                matching: .any(of: [.images, .videos])
-            ) {
+            Button { isPresentingPhotoPicker = true } label: {
                 GlassIcon(systemName: "photo")
             }
-            #endif
+            .help("Open from your photo library")
             if #available(macOS 26.0, iOS 26.0, *) {
+                // The container's own `spacing` is how close two pieces of glass
+                // have to be before they flow into one — it lays nothing out. Its
+                // contents still need a stack, or all three buttons land on top
+                // of each other in the corner.
                 GlassEffectContainer(spacing: 24.0) {
-                    slideshowButton
+                    HStack(spacing: 8) {
+                        slideshowButton
+                            .buttonStyle(.smallLiquidGlass)
+                            .glassEffectUnion(id: "1", namespace: namespace)
+
+                        Button { isPresentingImporter = true } label: {
+                            GlassIcon(systemName: "folder")
+                        }
                         .buttonStyle(.smallLiquidGlass)
                         .glassEffectUnion(id: "1", namespace: namespace)
+                        .help("Open files or a folder")
 
-                    Button { isPresentingImporter = true } label: {
-                        GlassIcon(systemName: "folder")
+                        Button { library.clear() } label: {
+                            GlassIcon(systemName: "xmark")
+                        }
+                        .buttonStyle(.smallLiquidGlass)
+                        .glassEffectUnion(id: "1", namespace: namespace)
+                        .help("Close")
                     }
-                    .buttonStyle(.smallLiquidGlass)
-                    .glassEffectUnion(id: "1", namespace: namespace)
-                    .help("Open files or a folder")
-
-                    Button { library.clear() } label: {
-                        GlassIcon(systemName: "xmark")
-                    }
-                    .buttonStyle(.smallLiquidGlass)
-                    .glassEffectUnion(id: "1", namespace: namespace)
-                    .help("Close")
                 }
             } else {
                 // Fallback on earlier versions
@@ -182,7 +224,7 @@ struct ContentView: View {
         .buttonStyle(.borderless)
         .padding(.leading, leadingChromeInset)
         .padding(.trailing, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, topBarVerticalPadding)
         .background {
             LinearGradient(
                 colors: [.black.opacity(0.55), .clear],
@@ -206,22 +248,24 @@ struct ContentView: View {
     }
 
     private var bottomBar: some View {
-        VStack {
-            
+        VStack(spacing: 14) {
             MediaActions()
-        MediaProgressIndicator(index: library.currentIndex, count: library.items.count)
-            .padding(.top, 12)
-            .padding(.bottom, 18)
-            .frame(maxWidth: .infinity)
-            .background {
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.55)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea(edges: .bottom)
-                .allowsHitTesting(false)
-            }
+            MediaProgressIndicator(index: library.currentIndex, count: library.items.count)
+        }
+        .padding(.top, 16)
+        .padding(.bottom, 18)
+        .frame(maxWidth: .infinity)
+        // The scrim covers the whole bar, actions included. Hung on the stack
+        // rather than on the indicator alone, which left the buttons sitting
+        // over bare photo with nothing behind them to read against.
+        .background {
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.55)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: .bottom)
+            .allowsHitTesting(false)
         }
     }
 
@@ -239,10 +283,76 @@ struct ContentView: View {
         let added = library.open(urls: urls)
         if added == 0 {
             notice = "That selection didn't contain any images or videos."
+            return
+        }
+        recents.remember(urls: urls)
+    }
+
+    /// Opens a shortcut from the recents list.
+    private func reopen(_ entry: RecentSource) {
+        switch entry.kind {
+        case .files:
+            reopenFiles(entry)
+        case .photos:
+            Task { await reopenPhotos(entry) }
         }
     }
 
-    #if os(iOS)
+    private func reopenFiles(_ entry: RecentSource) {
+        var urls: [URL] = []
+        var refreshed: [Data] = []
+        var didGoStale = false
+
+        for bookmark in entry.bookmarks {
+            guard let resolved = FileBookmark.resolve(bookmark) else { continue }
+            urls.append(resolved.url)
+
+            // A stale bookmark still resolves — the file has just moved or the
+            // volume was remounted — but it won't keep doing so forever, so it's
+            // written back while we hold access to the URL it points at.
+            if resolved.isStale, let fresh = FileBookmark.data(for: resolved.url) {
+                refreshed.append(fresh)
+                didGoStale = true
+            } else {
+                refreshed.append(bookmark)
+            }
+        }
+
+        guard !urls.isEmpty else {
+            // Nothing left to point at: drop the shortcut rather than leave a
+            // row that does nothing when tapped.
+            recents.remove(entry)
+            notice = "\(entry.title) has moved or is no longer available."
+            return
+        }
+
+        let added = library.open(urls: urls)
+        if added == 0 {
+            notice = "\(entry.title) no longer contains any images or videos."
+            return
+        }
+
+        if didGoStale { recents.refresh(entry, bookmarks: refreshed) }
+        recents.touch(entry)
+    }
+
+    private func reopenPhotos(_ entry: RecentSource) async {
+        isImportingPhotos = true
+        defer { isImportingPhotos = false }
+
+        do {
+            let urls = try await PhotoLibraryImport.copyToTemporary(identifiers: entry.assetIdentifiers)
+            let added = library.open(urls: urls, temporary: true)
+            if added == 0 {
+                notice = "Those items couldn't be loaded from your library."
+                return
+            }
+            recents.touch(entry)
+        } catch {
+            notice = error.localizedDescription
+        }
+    }
+
     private func importFromPhotos(_ selection: [PhotosPickerItem]) async {
         isImportingPhotos = true
         defer {
@@ -251,18 +361,32 @@ struct ContentView: View {
         }
 
         var urls: [URL] = []
+        var identifiers: [String] = []
+        var failure: String?
         for item in selection {
-            if let picked = try? await item.loadTransferable(type: PickedMedia.self) {
-                urls.append(picked.url)
+            do {
+                if let picked = try await item.loadTransferable(type: PickedMedia.self) {
+                    urls.append(picked.url)
+                    // The copy under `picked.url` is deleted when the library is
+                    // cleared, so the identifier is the only part of this worth
+                    // remembering.
+                    if let identifier = item.itemIdentifier { identifiers.append(identifier) }
+                }
+            } catch {
+                // Keep going through the rest of the selection, but hold on to
+                // the reason so a total failure says something more useful than
+                // "couldn't be loaded".
+                failure = failure ?? error.localizedDescription
             }
         }
 
         let added = library.open(urls: urls, temporary: true)
         if added == 0 {
-            notice = "Those items couldn't be loaded from your library."
+            notice = failure ?? "Those items couldn't be loaded from your library."
+            return
         }
+        recents.rememberPhotos(identifiers: identifiers)
     }
-    #endif
 }
 
 
@@ -285,4 +409,5 @@ struct GlassIcon: View {
 #Preview {
     ContentView()
         .environment(MediaLibrary())
+        .environment(RecentSources())
 }

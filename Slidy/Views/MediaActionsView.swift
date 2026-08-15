@@ -12,33 +12,50 @@ import SwiftUI
 struct MediaActions: View {
     // TODO: add glass container merged
     var body: some View {
-        HStack(spacing: 12.0) {
+        HStack(spacing: 16.0) {
             RotateAction()
             DeleteAction()
-        }.padding(EdgeInsets(top: 0, leading: 32.0, bottom: 0.0, trailing: 32.0))
+        }
+        // Centred in the bar rather than laid out from the leading edge, so the
+        // pair stays under the thumb on a phone and doesn't drift left of the
+        // page indicator.
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 32.0)
     }
 }
+/// The face of a bottom-bar button. One size on both branches: the glass and
+/// non-glass paths used to draw the same icon at 24pt and 13pt, so the bar
+/// changed size depending on what the OS supported.
+private struct ActionIcon: View {
+    let systemName: String
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: 18, weight: .semibold))
+            .frame(width: 26, height: 26)
+            .padding(8.0)
+    }
+}
+
 struct RotateAction: View {
     @Environment(MediaLibrary.self) private var library
     @Namespace private var namespace
-    
+
     var body: some View {
         if (library.currentItem?.kind == MediaKind.video) {
             // empty view
         }
         else {
-            
-        
+
+
         if #available(macOS 26.0, iOS 26.0, *) {
             GlassEffectContainer {
-                
-            
+
+
                 Button {
                     library.rotateImage()
                 } label: {
-                Image(systemName: "arrow.clockwise")
-                    .padding(6.0)
-                    .font(.system(size: 24, weight: .semibold))
+                    ActionIcon(systemName: "arrow.clockwise")
             }
             .cornerRadius(99.9)
             .buttonStyle(.smallLiquidGlass)
@@ -48,9 +65,7 @@ struct RotateAction: View {
             Button {
                 library.rotateImage()
             } label: {
-                Image(systemName: "arrow.clockwise")
-                    .padding(6.0)
-                    .font(.system(size: 13, weight: .semibold))
+                ActionIcon(systemName: "arrow.clockwise")
             }.cornerRadius(99.9)
         }
         }
@@ -67,9 +82,7 @@ struct DeleteAction: View {
                 
             
             Button {library.deleteCurrent()  } label: {
-                Image(systemName: "trash")
-                    .padding(6.0)
-                    .font(.system(size: 24, weight: .semibold))
+                ActionIcon(systemName: "trash")
             }
             .cornerRadius(99.9)
             .buttonStyle(.smallLiquidGlass)
@@ -78,9 +91,7 @@ struct DeleteAction: View {
             // Fallback on earlier versions
             Button {library.deleteCurrent()  }
             label: {
-                Image(systemName: "trash")
-                    .padding(6.0)
-                    .font(.system(size: 13, weight: .semibold))
+                ActionIcon(systemName: "trash")
             }.cornerRadius(99.9)
                 .frame(alignment: Alignment.center)
         }
